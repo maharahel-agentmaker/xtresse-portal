@@ -1,0 +1,184 @@
+/* ============================================================
+   Xtressé™ — Portal / App-chrome components
+   Bridges the editorial brand onto a functional project portal.
+   Depends on xtresse-tokens.css (import it first).
+   Every value derives from a brand token — no invented colors.
+   ============================================================ */
+
+
+/* ── App shell ─────────────────────────────────────────────── */
+.xp-app {
+  display: grid;
+  grid-template-columns: 248px 1fr;
+  min-height: 100vh;
+  background: var(--x-creme);
+  color: var(--x-black);
+  font-family: var(--font-sans);
+}
+
+/* ── Sidebar (Carob inverse — the brand's footer logic, applied as nav) ── */
+.xp-sidebar {
+  background: var(--x-black);
+  color: var(--x-creme);
+  padding: var(--sp-6) var(--sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-7);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+.xp-sidebar-brand img { height: 22px; width: auto; display: block; filter: invert(1); }
+.xp-nav { display: flex; flex-direction: column; gap: var(--sp-1); }
+.xp-nav-label {
+  font-size: 10px; letter-spacing: var(--tr-eyebrow); text-transform: uppercase;
+  color: var(--x-orange); font-weight: 500; margin: var(--sp-3) 0 var(--sp-2);
+}
+.xp-nav-item {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: 10px var(--sp-3); border-radius: var(--r-2);
+  color: rgba(247,245,240,0.78); text-decoration: none;
+  font-size: var(--fs-body-sm); font-weight: 400;
+  transition: background var(--dur-base) var(--ease-soft), color var(--dur-base) var(--ease-soft);
+}
+.xp-nav-item:hover { background: var(--x-black-soft); color: var(--x-creme); }
+.xp-nav-item[aria-current="page"],
+.xp-nav-item.is-active { background: var(--x-orange); color: var(--x-black); font-weight: 500; }
+.xp-nav-item svg { width: 18px; height: 18px; stroke-width: 1.25; flex-shrink: 0; }
+
+/* ── Main column ───────────────────────────────────────────── */
+.xp-main { display: flex; flex-direction: column; min-width: 0; }
+.xp-topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-5); padding: var(--sp-4) var(--sp-7);
+  background: var(--x-creme); border-bottom: var(--border-hair);
+  position: sticky; top: 0; z-index: 10;
+}
+.xp-topbar-title { font-family: var(--font-serif); font-weight: 400; font-size: var(--fs-h4); letter-spacing: var(--tr-snug); }
+.xp-topbar-actions { display: flex; align-items: center; gap: var(--sp-4); }
+.xp-content { padding: var(--sp-7); display: flex; flex-direction: column; gap: var(--sp-6); }
+
+/* page header */
+.xp-page-head { display: flex; flex-direction: column; gap: var(--sp-2); }
+.xp-eyebrow { font-size: var(--fs-eyebrow); letter-spacing: var(--tr-eyebrow); text-transform: uppercase; color: var(--fg-2); font-weight: 500; }
+.xp-page-title { font-family: var(--font-serif); font-weight: 400; font-size: var(--fs-h2); line-height: var(--lh-snug); letter-spacing: var(--tr-tight); }
+
+/* ── Buttons (mirror brand buttons; uppercase action style) ──── */
+.xp-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+  padding: 12px var(--sp-5); font-family: var(--font-sans);
+  font-size: var(--fs-body-sm); font-weight: 500; letter-spacing: 0.02em;
+  border-radius: var(--r-2); border: 1px solid transparent; cursor: pointer;
+  transition: background var(--dur-base) var(--ease-soft), color var(--dur-base) var(--ease-soft), border-color var(--dur-base) var(--ease-soft);
+}
+.xp-btn svg { width: 16px; height: 16px; stroke-width: 1.5; }
+.xp-btn-primary { background: var(--x-black); color: var(--x-creme); }
+.xp-btn-primary:hover { background: var(--x-orange); color: var(--x-black); }
+.xp-btn-secondary { background: transparent; color: var(--x-black); border-color: var(--x-line-strong); }
+.xp-btn-secondary:hover { background: var(--x-black); color: var(--x-creme); border-color: var(--x-black); }
+.xp-btn-ghost { background: transparent; color: var(--fg-2); }
+.xp-btn-ghost:hover { background: var(--x-creme-warm); color: var(--x-black); }
+.xp-icon-btn {
+  width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--r-2); border: 1px solid transparent; background: transparent; cursor: pointer;
+  color: var(--x-black); transition: background var(--dur-base) var(--ease-soft);
+}
+.xp-icon-btn:hover { background: var(--x-creme-warm); }
+.xp-icon-btn svg { width: 18px; height: 18px; stroke-width: 1.25; }
+
+/* ── Cards & metrics ───────────────────────────────────────── */
+.xp-card {
+  background: var(--bg-2); border: var(--border-hair); border-radius: var(--r-3);
+  padding: var(--sp-5); box-shadow: var(--shadow-1);
+}
+.xp-card-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: var(--sp-4); }
+.xp-card-title { font-family: var(--font-serif); font-weight: 400; font-size: var(--fs-h4); letter-spacing: var(--tr-snug); }
+
+.xp-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--sp-4); }
+.xp-stat { background: var(--bg-2); border: var(--border-hair); border-radius: var(--r-3); padding: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-2); }
+.xp-stat-label { font-size: var(--fs-eyebrow); letter-spacing: var(--tr-caps); text-transform: uppercase; color: var(--fg-2); }
+.xp-stat-value { font-family: var(--font-serif); font-weight: 400; font-size: 40px; line-height: 1; letter-spacing: var(--tr-tight); }
+.xp-stat-sub { font-size: var(--fs-body-sm); color: var(--fg-2); }
+
+/* ── Status badges (pill = tags only, per brand) ───────────── */
+.xp-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: var(--r-pill);
+  font-size: var(--fs-eyebrow); font-weight: 500; letter-spacing: var(--tr-caps);
+  text-transform: uppercase; white-space: nowrap;
+}
+.xp-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+/* On-track / done — Carob on creme (neutral, premium) */
+.xp-badge-default  { background: var(--x-creme-warm); color: var(--x-muted); }
+/* Active / in-progress — the heroic L'Orange field */
+.xp-badge-active   { background: var(--x-orange-soft); color: var(--x-orange-deep); }
+/* Complete — Carob solid (quiet authority, not green) */
+.xp-badge-done     { background: var(--x-black); color: var(--x-orange); }
+/* At-risk / blocked — the single Merlot accent. Use sparingly. */
+.xp-badge-risk     { background: #F4E3E3; color: var(--x-merlot-deep); }
+
+/* ── Tabs (underline, brand form logic) ────────────────────── */
+.xp-tabs { display: flex; gap: var(--sp-6); border-bottom: var(--border-hair); }
+.xp-tab {
+  padding: var(--sp-3) 0; font-size: var(--fs-body-sm); font-weight: 500;
+  letter-spacing: var(--tr-caps); color: var(--fg-2); background: none; border: none;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer;
+  transition: color var(--dur-base) var(--ease-soft), border-color var(--dur-base) var(--ease-soft);
+}
+.xp-tab:hover { color: var(--x-black); }
+.xp-tab.is-active { color: var(--x-black); border-bottom-color: var(--x-black); }
+
+/* ── Data table ────────────────────────────────────────────── */
+.xp-table { width: 100%; border-collapse: collapse; background: var(--bg-2); border: var(--border-hair); border-radius: var(--r-3); overflow: hidden; }
+.xp-table thead th {
+  text-align: left; padding: var(--sp-3) var(--sp-4);
+  font-size: var(--fs-eyebrow); letter-spacing: var(--tr-caps); text-transform: uppercase;
+  color: var(--fg-2); font-weight: 500; background: var(--x-creme);
+  border-bottom: var(--border-hair);
+}
+.xp-table tbody td { padding: var(--sp-4); font-size: var(--fs-body-sm); border-bottom: var(--border-hair); }
+.xp-table tbody tr:last-child td { border-bottom: none; }
+.xp-table tbody tr { transition: background var(--dur-fast) var(--ease-soft); }
+.xp-table tbody tr:hover { background: var(--x-creme); }
+.xp-table-name { font-weight: 500; color: var(--x-black); }
+
+/* ── Forms (underline inputs; Merlot focus — brand rule) ───── */
+.xp-field { display: flex; flex-direction: column; gap: var(--sp-2); }
+.xp-label { font-size: var(--fs-eyebrow); letter-spacing: var(--tr-caps); text-transform: uppercase; color: var(--fg-2); font-weight: 500; }
+.xp-input, .xp-select, .xp-textarea {
+  font-family: var(--font-sans); font-size: var(--fs-body); color: var(--x-black);
+  background: transparent; border: none; border-bottom: 1px solid var(--x-black);
+  border-radius: 0; padding: var(--sp-2) 0; transition: border-color var(--dur-base) var(--ease-soft);
+}
+.xp-input:focus, .xp-select:focus, .xp-textarea:focus { outline: none; border-bottom-color: var(--x-merlot); }
+.xp-input::placeholder, .xp-textarea::placeholder { color: var(--fg-3); }
+/* Search (the one place a soft fill reads as a control, not a field) */
+.xp-search {
+  display: flex; align-items: center; gap: var(--sp-2);
+  padding: 8px var(--sp-3); background: var(--bg-2);
+  border: var(--border-hair); border-radius: var(--r-2); min-width: 240px;
+}
+.xp-search:focus-within { border-color: var(--x-line-strong); }
+.xp-search input { border: none; background: none; outline: none; font-family: var(--font-sans); font-size: var(--fs-body-sm); width: 100%; }
+.xp-search svg { width: 16px; height: 16px; stroke-width: 1.25; color: var(--fg-2); }
+
+/* ── Avatar ────────────────────────────────────────────────── */
+.xp-avatar {
+  width: 32px; height: 32px; border-radius: 50%; display: inline-flex;
+  align-items: center; justify-content: center; background: var(--x-orange);
+  color: var(--x-black); font-size: var(--fs-body-sm); font-weight: 500; flex-shrink: 0;
+}
+.xp-avatar-stack { display: flex; }
+.xp-avatar-stack .xp-avatar { margin-left: -8px; border: 2px solid var(--x-creme); }
+.xp-avatar-stack .xp-avatar:first-child { margin-left: 0; }
+
+/* ── Progress (hairline track, Carob fill) ─────────────────── */
+.xp-progress { height: 4px; background: var(--x-line); border-radius: var(--r-pill); overflow: hidden; }
+.xp-progress-fill { height: 100%; background: var(--x-black); border-radius: var(--r-pill); }
+.xp-progress-fill.is-orange { background: var(--x-orange-deep); }
+
+/* ── Empty state ───────────────────────────────────────────── */
+.xp-empty { text-align: center; padding: var(--sp-9) var(--sp-5); display: flex; flex-direction: column; align-items: center; gap: var(--sp-3); }
+.xp-empty-num { font-family: var(--font-serif); font-size: 56px; color: var(--x-line-strong); line-height: 1; }
+.xp-empty-title { font-family: var(--font-serif); font-size: var(--fs-h3); }
+.xp-empty-body { font-size: var(--fs-body-sm); color: var(--fg-2); max-width: 360px; }

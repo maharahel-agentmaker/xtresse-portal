@@ -1,0 +1,84 @@
+@import 'tailwindcss/base';
+@import 'tailwindcss/components';
+@import 'tailwindcss/utilities';
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Brand foundation (tokens are defined in xtresse-tokens.css, loaded first in _app) */
+html, body {
+  font-family: var(--font-sans, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
+  background-color: var(--x-creme, #F7F5F0);
+  color: var(--x-black, #191817);
+  font-weight: 300;
+}
+
+/* Serif display family for headings + stat values (the editorial signature) */
+.x-serif { font-family: var(--font-serif, 'Playfair Display', Georgia, serif); font-weight: 400; }
+
+/* Eyebrow / label treatment */
+.x-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--x-muted, #6E6A63);
+}
+
+/* Brand rule: no italics anywhere */
+i, em, .italic { font-style: normal !important; }
+
+/* Primary action — Carob fill that hovers to L'Orange (signature) */
+.x-btn-primary {
+  background-color: var(--x-black, #191817);
+  color: var(--x-creme, #F7F5F0);
+  transition: background-color 280ms cubic-bezier(.22,1,.36,1), color 280ms cubic-bezier(.22,1,.36,1);
+}
+.x-btn-primary:hover { background-color: var(--x-orange, #FFC45C); color: var(--x-black, #191817); }
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .sticky { position: fixed; top: 0; left: 0; right: 0; }
+  .hide-on-mobile { display: none !important; }
+  .overflow-x-auto { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .grid.grid-cols-2 { grid-template-columns: 1fr !important; }
+  h1 { font-size: 26px; }
+  h2 { font-size: 19px; }
+  .text-sm { font-size: 12px; }
+  .px-6 { padding-left: 12px; padding-right: 12px; }
+  .px-4 { padding-left: 8px; padding-right: 8px; }
+  button { padding: 8px 12px; font-size: 13px; }
+  table { font-size: 12px; }
+  th, td { padding: 6px 4px !important; }
+  .max-w-2xl { max-width: 95vw; }
+  .hide-mobile { display: none !important; }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .px-6 { padding-left: 16px; padding-right: 16px; }
+}
+
+@media (max-width: 640px) {
+  th:nth-child(n+5), td:nth-child(n+5) { display: none; }
+  th:first-child, td:first-child { min-width: 200px; }
+}
+
+/* Print styles */
+@media print {
+  .no-print { display: none !important; }
+  body { background-color: white; }
+  .max-w-7xl { max-width: 100%; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #ddd; padding: 8px; }
+  th { background-color: #f5f5f5; }
+  .page-break { page-break-after: always; }
+}
+
+/* Scrollbar styling (brand neutrals) */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--x-creme-warm, #EFEAE0); }
+::-webkit-scrollbar-thumb { background: var(--x-line-strong, #C8C2B4); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--x-muted, #6E6A63); }
