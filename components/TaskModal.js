@@ -9,10 +9,29 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
   const [name, setName] = useState(task.name || '')
   const [clientFeedback, setClientFeedback] = useState('')
   const [expandedSubtask, setExpandedSubtask] = useState(null)
-  const [feedbackLogs, setFeedbackLogs] = useState([])
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState([])
+  const [conversation, setConversation] = useState([])
   const fileInputRef = useRef(null)
+
+  const MAX_FILE_MB = 4
+  const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024
+
+  const fetchConversation = async () => {
+    try {
+      const res = await fetch(`/api/tasks/${task.gid}/comments`)
+      if (!res.ok) return
+      const data = await res.json()
+      setConversation(data.messages || [])
+    } catch (e) { /* ignore */ }
+  }
+
+  useEffect(() => {
+    fetchConversation()
+    const interval = setInterval(fetchConversation, 10000)
+    return () => clearInterval(interval)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.gid])
 
   const formatDate = (dateString) => {
     if (!dateString) return '—'
@@ -37,11 +56,12 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
   }
 
   const uploadFilesToAsana = async (taskGid) => {
-    if (uploadedFiles.length === 0) return true
+    if (uploadedFiles.length === 0) return { ok: true, errors: [] }
+    const errors = []
     try {
       setLoading(true)
-      const uploadPromises = uploadedFiles.map(async (fileObj) => {
-        if (!fileObj.file) return null
+      for (const fileObj of uploadedFiles) {
+        if (!fileObj.file) continue
         try {
           const fileBuffer = await fileToBase64(fileObj.file)
           const response = await fetch('/api/tasks/upload', {
@@ -49,27 +69,43 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ taskGid, fileName: fileObj.name, fileBuffer, fileType: fileObj.type })
           })
-          if (!response.ok) { console.error(`Failed to upload ${fileObj.name}`); return false }
-          return true
-        } catch (error) { console.error(`Error uploading ${fileObj.name}:`, error); return false }
-      })
-      const results = await Promise.all(uploadPromises)
-      return results.every(r => r !== false && r !== null)
-    } catch (error) { console.error('Error uploading files:', error); return false }
-    finally { setLoading(false) }
+          if (!response.ok) {
+            let msg = `${response.status}`
+            try {
+              const data = await response.json()
+              const d = data.details
+              msg = (d && (d.errors?.[0]?.message || d.message)) || data.error || msg
+            } catch (e) { /* ignore */ }
+            errors.push(`${fileObj.name}: ${msg}`)
+          }
+        } catch (error) {
+          errors.push(`${fileObj.name}: ${error.message}`)
+        }
+      }
+      return { ok: errors.length === 0, errors }
+    } catch (error) {
+      return { ok: false, errors: [error.message] }
+    } finally { setLoading(false) }
   }
 
-  useEffect(() => {
-    const stored = localStorage.getItem(`feedback-${task.gid}`)
-    if (stored) setFeedbackLogs(JSON.parse(stored))
-  }, [task.gid])
+
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files)
-    const newFiles = files.map(file => ({
+    const tooBig = files.filter(f => f.size > MAX_FILE_BYTES)
+    const okFiles = files.filter(f => f.size <= MAX_FILE_BYTES)
+    if (tooBig.length > 0) {
+      alert(
+        `These files are over the ${MAX_FILE_MB} MB limit and weren't added:\n\n` +
+        tooBig.map(f => `• ${f.name} (${formatFileSize(f.size)})`).join('\n') +
+        `\n\nFor larger files, paste a share link (Drive, Dropbox, WeTransfer) in the feedback box instead.`
+      )
+    }
+    const newFiles = okFiles.map(file => ({
       id: `${Date.now()}-${Math.random()}`, name: file.name, size: file.size, type: file.type, file
     }))
-    setUploadedFiles([...uploadedFiles, ...newFiles])
+    if (newFiles.length > 0) setUploadedFiles([...uploadedFiles, ...newFiles])
+    if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   const removeFile = (fileId) => setUploadedFiles(uploadedFiles.filter(f => f.id !== fileId))
@@ -89,17 +125,33 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
     }
     setLoading(true)
     try {
+      const fileNames = uploadedFiles.map(f => f.name)
+
       if (uploadedFiles.length > 0) {
-        const uploadSuccess = await uploadFilesToAsana(task.gid)
-        if (!uploadSuccess) console.warn('Some files failed to upload')
+        const { ok, errors } = await uploadFilesToAsana(task.gid)
+        if (!ok) {
+          alert(
+            'Your files could not be attached, so nothing was sent:\n\n' +
+            errors.join('\n') +
+            '\n\nPlease try again. For large files, paste a share link in the box instead.'
+          )
+          setLoading(false)
+          return
+        }
       }
-      const feedbackText = clientFeedback
-      await axios.post(`/api/tasks/${task.gid}/comment`, { text: `[Client Feedback]\n${feedbackText}` })
+
+      // Build the comment. Include an "Uploaded:" line so the conversation shows
+      // a confirmation even when only a file (no text) was sent.
+      let body = clientFeedback.trim()
+      if (fileNames.length > 0) {
+        body = (body ? body + '\n\n' : '') + `Uploaded: ${fileNames.join(', ')}`
+      }
+      await axios.post(`/api/tasks/${task.gid}/comment`, { text: `[Client Feedback]\n${body}` })
 
       try {
         const notificationType = uploadedFiles.length > 0 ? 'upload' : 'comment'
         const notificationMessage = uploadedFiles.length > 0
-          ? `${uploadedFiles.map(f => f.name).join(', ')}\n\n${clientFeedback}`
+          ? `${fileNames.join(', ')}\n\n${clientFeedback}`
           : clientFeedback
         const response = await fetch('/api/notify', {
           method: 'POST',
@@ -107,7 +159,7 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
           body: JSON.stringify({
             taskName: task.name, taskGid: task.gid, message: notificationMessage,
             type: notificationType,
-            fileName: uploadedFiles.length > 0 ? uploadedFiles.map(f => f.name).join(', ') : null,
+            fileName: fileNames.length > 0 ? fileNames.join(', ') : null,
             userName: 'Client'
           })
         })
@@ -115,15 +167,11 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
         if (!response.ok) console.error('Slack notification failed:', data)
       } catch (error) { console.error('Error sending Slack notification:', error) }
 
-      const newLog = { id: Date.now(), timestamp: new Date().toISOString(), feedback: clientFeedback, files: uploadedFiles.map(f => f.name) }
-      const updated = [...feedbackLogs, newLog]
-      setFeedbackLogs(updated)
-      localStorage.setItem(`feedback-${task.gid}`, JSON.stringify(updated))
-
       setShowConfirmation(true)
       setClientFeedback('')
       setUploadedFiles([])
       if (fileInputRef.current) fileInputRef.current.value = ''
+      fetchConversation()
       setTimeout(() => setShowConfirmation(false), 5000)
     } catch (e) {
       console.error('Error sending feedback:', e)
@@ -192,7 +240,7 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
               <span style={{ color: X.black, flexShrink: 0, display: 'flex' }}><IconCheck size={22} /></span>
               <div>
                 <p style={{ fontSize: '15px', fontWeight: 500, color: X.black }}>Feedback sent.</p>
-                <p style={{ fontSize: '13px', color: X.muted, marginTop: '6px' }}>Your feedback has been posted as a comment in Asana and added to the feedback log below.</p>
+                <p style={{ fontSize: '13px', color: X.muted, marginTop: '6px' }}>Your message has been posted and your team has been notified. It will appear in the conversation below.</p>
               </div>
             </div>
           )}
@@ -367,22 +415,45 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
                 <IconPaperclip size={16} />
               </button>
             </div>
+
+            <p style={{ fontSize: '12px', color: X.muted, marginTop: '10px', lineHeight: 1.5 }}>
+              Accepted files: images (JPG, PNG, GIF), PDF, Word, Excel, PowerPoint, TXT, CSV. Max {MAX_FILE_MB} MB per file. For larger files, paste a share link (Drive, Dropbox, WeTransfer) in the box above.
+            </p>
           </div>
 
-          {/* Feedback Log */}
-          {feedbackLogs.length > 0 && (
+          {/* Conversation — client feedback + Branday replies, pulled live from Asana */}
+          {conversation.length > 0 && (
             <div style={{ marginBottom: '4px' }}>
-              <h3 style={{ ...eyebrow, marginBottom: '12px' }}>Client feedback log</h3>
-              <div className="space-y-2" style={{ backgroundColor: X.creme, borderRadius: '8px', padding: '16px', maxHeight: '192px', overflowY: 'auto' }}>
-                {feedbackLogs.map((log) => (
-                  <div key={log.id} style={{ borderLeft: `2px solid ${X.orange}`, paddingLeft: '12px', paddingTop: '8px', paddingBottom: '8px' }}>
-                    <p style={{ fontSize: '12px', color: X.muted, marginBottom: '4px' }}>{new Date(log.timestamp).toLocaleDateString()}</p>
-                    <p style={{ fontSize: '14px', color: X.black }}>{log.feedback}</p>
-                    {log.files && log.files.length > 0 && (
-                      <p style={{ fontSize: '12px', color: X.muted, marginTop: '4px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}><IconPaperclip size={13} /> {log.files.join(', ')}</p>
-                    )}
-                  </div>
-                ))}
+              <h3 style={{ ...eyebrow, marginBottom: '12px' }}>Conversation</h3>
+              <div style={{ backgroundColor: X.creme, borderRadius: '8px', padding: '16px', maxHeight: '320px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {conversation.map((msg) => {
+                  const isClient = msg.side === 'client'
+                  const when = msg.created_at
+                    ? new Date(msg.created_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+                    : ''
+                  return (
+                    <div key={msg.gid} style={{ display: 'flex', justifyContent: isClient ? 'flex-start' : 'flex-end' }}>
+                      <div style={{ maxWidth: '80%' }}>
+                        <p style={{ fontSize: '11px', color: X.muted, marginBottom: '4px', textAlign: isClient ? 'left' : 'right' }}>
+                          {isClient ? 'You' : (msg.author || 'Branday')}{when ? ` · ${when}` : ''}
+                        </p>
+                        <div style={{
+                          padding: '10px 12px',
+                          borderRadius: '10px',
+                          fontSize: '14px',
+                          lineHeight: 1.5,
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          backgroundColor: isClient ? '#FFFFFF' : X.black,
+                          color: isClient ? X.black : X.creme,
+                          border: isClient ? `1px solid ${X.line}` : 'none',
+                        }}>
+                          {msg.text}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}

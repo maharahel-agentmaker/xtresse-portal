@@ -7,6 +7,7 @@ import DueThisWeekSection from '../components/DueThisWeekSection'
 import ProgressDashboard from '../components/ProgressDashboard'
 import TimelineView from '../components/TimelineView'
 import ExportButton from '../components/ExportButton'
+import TaskModal from '../components/TaskModal'
 import { X } from '../components/brand'
 import { IconTable, IconKanban, IconDashboard, IconCalendar, IconRefresh, IconSearch, IconFilter } from '../components/Icons'
 
@@ -24,15 +25,28 @@ export default function Home() {
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('')
   const [filterStage, setFilterStage] = useState('all')
-  const [filterAssignee, setFilterAssignee] = useState('all')
+  const [filterRequester, setFilterRequester] = useState('all')
   const [showFilters, setShowFilters] = useState(false)
+  const [deepLinkTaskGid, setDeepLinkTaskGid] = useState(null)
+
+  // Read a ?task=<gid> deep link from the URL on mount (e.g. from a Slack link)
+  useEffect(() => {
+    const gid = new URLSearchParams(window.location.search).get('task')
+    if (gid) setDeepLinkTaskGid(gid)
+  }, [])
+
+  const closeDeepLink = () => {
+    setDeepLinkTaskGid(null)
+    // Clean the ?task= param so a refresh doesn't reopen it
+    window.history.replaceState(null, '', window.location.pathname)
+  }
 
   useEffect(() => {
     const saved = localStorage.getItem('portalPreferences')
     if (saved) {
       const prefs = JSON.parse(saved)
       setFilterStage(prefs.filterStage || 'all')
-      setFilterAssignee(prefs.filterAssignee || 'all')
+      setFilterRequester(prefs.filterRequester || 'all')
       setView(prefs.view || 'table')
     }
     const checkMobile = () => setIsMobile(window.innerWidth < 768)
@@ -42,9 +56,9 @@ export default function Home() {
   }, [])
 
   useEffect(() => {
-    const prefs = { filterStage, filterAssignee, view }
+    const prefs = { filterStage, filterRequester, view }
     localStorage.setItem('portalPreferences', JSON.stringify(prefs))
-  }, [filterStage, filterAssignee, view])
+  }, [filterStage, filterRequester, view])
 
   const fetchTasks = async () => {
     try {
@@ -73,7 +87,20 @@ export default function Home() {
     return stageField.display_value || stageField.enum_value?.name || 'Unassigned'
   }
 
-  const uniqueAssignees = [...new Set(tasks.map(t => t.assignee?.name).filter(Boolean))].sort()
+  // Reads the "Requester email" custom field. Matches flexibly so it works whether
+  // the field is named "Requester email", "Requester Email", "Email", etc.
+  const getRequesterEmail = (task) => {
+    if (!task.custom_fields) return ''
+    const byName = (pred) => task.custom_fields.find(f => f.name && pred(f.name.toLowerCase()))
+    const field =
+      byName(n => n.includes('requester') && n.includes('email')) ||
+      byName(n => n.includes('requester')) ||
+      byName(n => n.includes('email'))
+    if (!field) return ''
+    return field.display_value || field.text_value || ''
+  }
+
+  const uniqueRequesters = [...new Set(tasks.map(t => getRequesterEmail(t)).filter(Boolean))].sort()
   const uniqueStages = [...new Set(tasks.map(t => getStage(t)))].sort()
 
   const filteredTasks = tasks.filter(task => {
@@ -81,20 +108,20 @@ export default function Home() {
     const matchesSearch =
       task.name.toLowerCase().includes(searchLower) ||
       task.notes?.toLowerCase().includes(searchLower) ||
-      task.assignee?.name.toLowerCase().includes(searchLower)
+      getRequesterEmail(task).toLowerCase().includes(searchLower)
     if (!matchesSearch) return false
     if (filterStage !== 'all') {
       if (getStage(task) !== filterStage) return false
     }
-    if (filterAssignee !== 'all') {
-      if (task.assignee?.name !== filterAssignee) return false
+    if (filterRequester !== 'all') {
+      if (getRequesterEmail(task) !== filterRequester) return false
     }
     return true
   })
 
   const completedCount = filteredTasks.filter(t => t.completed).length
   const totalCount = filteredTasks.length
-  const activeFilters = [filterStage !== 'all', filterAssignee !== 'all'].filter(Boolean).length
+  const activeFilters = [filterStage !== 'all', filterRequester !== 'all'].filter(Boolean).length
 
   // Tab styling — active = L'Orange on Carob; inactive = ghost on Carob
   const tabStyle = (active) => ({
@@ -201,21 +228,21 @@ export default function Home() {
                     </select>
                   </div>
                   <div>
-                    <label className="x-eyebrow" style={{ display: 'block', marginBottom: '8px' }}>Assignee</label>
+                    <label className="x-eyebrow" style={{ display: 'block', marginBottom: '8px' }}>Requester email</label>
                     <select
-                      value={filterAssignee}
-                      onChange={(e) => setFilterAssignee(e.target.value)}
+                      value={filterRequester}
+                      onChange={(e) => setFilterRequester(e.target.value)}
                       style={{ width: '100%', padding: '8px 4px', border: 'none', borderBottom: `1px solid ${X.lineStrong}`, background: 'transparent', fontSize: '14px', color: X.black, outline: 'none' }}
                     >
-                      <option value="all">All assignees</option>
-                      {uniqueAssignees.map(a => <option key={a} value={a}>{a}</option>)}
+                      <option value="all">All requesters</option>
+                      {uniqueRequesters.map(r => <option key={r} value={r}>{r}</option>)}
                     </select>
                   </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 justify-between items-center" style={{ marginTop: '14px' }}>
                   {activeFilters > 0 && (
                     <button
-                      onClick={() => { setFilterStage('all'); setFilterAssignee('all') }}
+                      onClick={() => { setFilterStage('all'); setFilterRequester('all') }}
                       style={{ fontSize: '13px', fontWeight: 500, color: X.merlot, background: 'transparent', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
                     >
                       Clear filters
@@ -259,6 +286,16 @@ export default function Home() {
             </>
           )}
         </div>
+
+        {/* Deep-linked task (opened via ?task=<gid>, e.g. from a Slack link) */}
+        {deepLinkTaskGid && tasks.find(t => t.gid === deepLinkTaskGid) && (
+          <TaskModal
+            task={tasks.find(t => t.gid === deepLinkTaskGid)}
+            onClose={closeDeepLink}
+            onUpdate={() => { fetchTasks(); closeDeepLink() }}
+            primaryColor={accent}
+          />
+        )}
       </div>
     </>
   )
