@@ -15,8 +15,7 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
   const [attachments, setAttachments] = useState([])
   const [lightbox, setLightbox] = useState(null)
   const [copied, setCopied] = useState(false)
-  const [winPos, setWinPos] = useState({ x: 0, y: 0 })
-  const [winSize, setWinSize] = useState({ w: null, h: null })
+  const [rect, setRect] = useState(null)
   const interaction = useRef(null)
   const cardRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -329,19 +328,28 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
   }
   const cleanName = (n) => fixMojibake(n)
 
-  // Let the user drag the window by its header and resize it from the corner.
+  // Drag the window by its title bar; resize it from any edge or corner.
+  const MIN_W = 320, MIN_H = 220
   useEffect(() => {
     const onMove = (e) => {
       const it = interaction.current
       if (!it) return
-      if (it.mode === 'drag') {
-        setWinPos({ x: it.ox + (e.clientX - it.mx), y: it.oy + (e.clientY - it.my) })
-      } else {
-        setWinSize({
-          w: Math.max(320, it.ow + (e.clientX - it.mx)),
-          h: Math.max(220, it.oh + (e.clientY - it.my)),
-        })
+      const dx = e.clientX - it.mx
+      const dy = e.clientY - it.my
+      const sr = it.sr
+      const vw = window.innerWidth, vh = window.innerHeight
+      if (it.move) {
+        let left = Math.min(Math.max(sr.left + dx, -(sr.width - 120)), vw - 120)
+        let top = Math.min(Math.max(sr.top + dy, 0), vh - 44)
+        setRect({ left, top, width: sr.width, height: sr.height })
+        return
       }
+      let { left, top, width, height } = sr
+      if (it.r) width = Math.min(Math.max(MIN_W, sr.width + dx), vw - sr.left)
+      if (it.b) height = Math.min(Math.max(MIN_H, sr.height + dy), vh - sr.top)
+      if (it.l) { const w = Math.min(Math.max(MIN_W, sr.width - dx), sr.left + sr.width); left = sr.left + (sr.width - w); width = w }
+      if (it.t) { const h = Math.min(Math.max(MIN_H, sr.height - dy), sr.top + sr.height); top = sr.top + (sr.height - h); height = h }
+      setRect({ left, top, width, height })
     }
     const onUp = () => { interaction.current = null; document.body.style.userSelect = '' }
     window.addEventListener('mousemove', onMove)
@@ -352,16 +360,15 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
     }
   }, [])
 
-  const startDrag = (e) => {
+  // Returns an onMouseDown handler. spec = { move } or any of { t, b, l, r }.
+  const beginInteraction = (spec) => (e) => {
     if (e.button !== 0) return
-    interaction.current = { mode: 'drag', mx: e.clientX, my: e.clientY, ox: winPos.x, oy: winPos.y }
-    document.body.style.userSelect = 'none'
-  }
-  const startResize = (e) => {
-    if (e.button !== 0) return
-    e.preventDefault()
-    const r = cardRef.current ? cardRef.current.getBoundingClientRect() : { width: 560, height: 480 }
-    interaction.current = { mode: 'resize', mx: e.clientX, my: e.clientY, ow: r.width, oh: r.height }
+    if (!spec.move) e.preventDefault()
+    e.stopPropagation()
+    const r = cardRef.current.getBoundingClientRect()
+    const sr = { left: r.left, top: r.top, width: r.width, height: r.height }
+    interaction.current = { ...spec, mx: e.clientX, my: e.clientY, sr }
+    if (!rect) setRect(sr)
     document.body.style.userSelect = 'none'
   }
 
@@ -371,16 +378,23 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
       <div
         ref={cardRef}
         style={{
-          backgroundColor: '#FFFFFF', borderRadius: '8px', position: 'relative',
-          display: 'flex', flexDirection: 'column',
-          width: winSize.w ? `${winSize.w}px` : '100%',
-          maxWidth: winSize.w ? 'none' : '40rem',
-          height: winSize.h ? `${winSize.h}px` : 'auto',
-          maxHeight: '85vh', overflow: 'hidden',
-          transform: `translate(${winPos.x}px, ${winPos.y}px)`,
+          backgroundColor: '#FFFFFF', borderRadius: '8px',
+          display: 'flex', flexDirection: 'column', overflow: 'hidden',
           boxShadow: '0 12px 40px rgba(25,24,23,0.10)',
+          ...(rect
+            ? { position: 'fixed', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px`, maxWidth: 'none', maxHeight: 'none' }
+            : { position: 'relative', width: '100%', maxWidth: '40rem', height: 'auto', maxHeight: '85vh' }),
         }}
       >
+        {/* Resize zones — four edges + four corners */}
+        <div onMouseDown={beginInteraction({ t: true })} style={{ position: 'absolute', zIndex: 5, top: 0, left: 0, right: 0, height: '6px', cursor: 'ns-resize' }} />
+        <div onMouseDown={beginInteraction({ b: true })} style={{ position: 'absolute', zIndex: 5, bottom: 0, left: 0, right: 0, height: '6px', cursor: 'ns-resize' }} />
+        <div onMouseDown={beginInteraction({ l: true })} style={{ position: 'absolute', zIndex: 5, top: 0, bottom: 0, left: 0, width: '6px', cursor: 'ew-resize' }} />
+        <div onMouseDown={beginInteraction({ r: true })} style={{ position: 'absolute', zIndex: 5, top: 0, bottom: 0, right: 0, width: '6px', cursor: 'ew-resize' }} />
+        <div onMouseDown={beginInteraction({ t: true, l: true })} style={{ position: 'absolute', zIndex: 6, top: 0, left: 0, width: '14px', height: '14px', cursor: 'nwse-resize' }} />
+        <div onMouseDown={beginInteraction({ t: true, r: true })} style={{ position: 'absolute', zIndex: 6, top: 0, right: 0, width: '14px', height: '14px', cursor: 'nesw-resize' }} />
+        <div onMouseDown={beginInteraction({ b: true, l: true })} style={{ position: 'absolute', zIndex: 6, bottom: 0, left: 0, width: '14px', height: '14px', cursor: 'nesw-resize' }} />
+        <div onMouseDown={beginInteraction({ b: true, r: true })} style={{ position: 'absolute', zIndex: 6, bottom: 0, right: 0, width: '14px', height: '14px', cursor: 'nwse-resize' }} />
         <div style={{ flex: '1 1 auto', overflowY: 'auto', minHeight: 0 }}>
         <div style={{ padding: '24px' }}>
           <style>{`
@@ -404,7 +418,7 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
           )}
 
           {/* Header */}
-          <div className="sticky top-0 z-40" onMouseDown={startDrag} style={{ backgroundColor: '#FFFFFF', paddingBottom: '16px', marginBottom: '16px', borderBottom: `1px solid ${X.line}`, cursor: 'move' }}>
+          <div className="sticky top-0 z-40" onMouseDown={beginInteraction({ move: true })} style={{ backgroundColor: '#FFFFFF', paddingBottom: '16px', marginBottom: '16px', borderBottom: `1px solid ${X.line}`, cursor: 'move' }}>
             <div className="flex justify-between items-start" style={{ marginBottom: '16px' }}>
               <h1 className="x-serif" style={{ fontSize: '24px', color: X.black, marginRight: '16px' }}>{name}</h1>
               <button onClick={onClose} onMouseDown={(e) => e.stopPropagation()} style={{ color: X.muted, flexShrink: 0, display: 'flex', background: 'transparent', border: 'none', cursor: 'pointer' }} title="Close"><IconClose size={22} /></button>
@@ -651,7 +665,6 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
           )}
         </div>
         </div>
-        <div onMouseDown={startResize} title="Drag to resize" style={{ position: 'absolute', right: '4px', bottom: '4px', width: '16px', height: '16px', cursor: 'nwse-resize', backgroundImage: `repeating-linear-gradient(135deg, ${X.lineStrong} 0 1.5px, transparent 1.5px 4px)`, opacity: 0.6, borderRadius: '2px' }} />
       </div>
     </div>
 
