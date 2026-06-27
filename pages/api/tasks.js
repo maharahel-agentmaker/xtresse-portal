@@ -8,7 +8,7 @@ const API_TOKEN = process.env.ASANA_API_TOKEN
 // cause of the response ballooning past Asana/Vercel's ~4.5MB limit.
 const CF = 'custom_fields.gid,custom_fields.name,custom_fields.display_value,custom_fields.text_value,custom_fields.number_value,custom_fields.enum_value.name'
 
-const TASK_FIELDS = `gid,name,notes,completed,due_on,assignee.name,tags.name,num_subtasks,created_at,modified_at,${CF}`
+const TASK_FIELDS = `gid,name,notes,html_notes,completed,due_on,assignee.name,tags.name,num_subtasks,created_at,modified_at,${CF}`
 const SUBTASK_FIELDS = `gid,name,notes,completed,due_on,assignee.name,num_subtasks,created_at,modified_at,${CF}`
 
 async function asanaFetch(path, options = {}) {
