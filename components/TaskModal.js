@@ -15,6 +15,10 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
   const [attachments, setAttachments] = useState([])
   const [lightbox, setLightbox] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [winPos, setWinPos] = useState({ x: 0, y: 0 })
+  const [winSize, setWinSize] = useState({ w: null, h: null })
+  const interaction = useRef(null)
+  const cardRef = useRef(null)
   const fileInputRef = useRef(null)
 
   const MAX_FILE_MB = 4
@@ -296,18 +300,88 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
         {docs.map(f => (
           <div key={f.gid} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', maxWidth: '100%', padding: '8px 10px', borderRadius: '4px', border: `1px solid ${chipBorder}`, background: chipBg, color: chipText, fontSize: '13px' }}>
             <span style={{ flexShrink: 0, display: 'flex' }}><IconPaperclip size={14} /></span>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{f.name}</span>
-            <a href={f.url} download={f.name} target="_blank" rel="noopener noreferrer" style={{ color: linkColor, textDecoration: 'underline', flexShrink: 0 }}>Download</a>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{cleanName(f.name)}</span>
+            <a href={f.url} download={cleanName(f.name)} target="_blank" rel="noopener noreferrer" style={{ color: linkColor, textDecoration: 'underline', flexShrink: 0 }}>Download</a>
           </div>
         ))}
       </div>
     )
   }
 
+  // Repair "mojibake" filenames — UTF-8 bytes mis-read as Windows-1252 (e.g. an
+  // em-dash showing as "â€\u0022"). Only touches strings with the tell-tale
+  // markers; anything that isn't actually mojibake is returned unchanged.
+  const fixMojibake = (s) => {
+    if (!s || !/[ÃÂâ]/.test(s)) return s
+    const W = { 0x20AC:0x80,0x201A:0x82,0x0192:0x83,0x201E:0x84,0x2026:0x85,0x2020:0x86,0x2021:0x87,0x02C6:0x88,0x2030:0x89,0x0160:0x8A,0x2039:0x8B,0x0152:0x8C,0x017D:0x8E,0x2018:0x91,0x2019:0x92,0x201C:0x93,0x201D:0x94,0x2022:0x95,0x2013:0x96,0x2014:0x97,0x02DC:0x98,0x2122:0x99,0x0161:0x9A,0x203A:0x9B,0x0153:0x9C,0x017E:0x9E,0x0178:0x9F }
+    try {
+      const bytes = []
+      for (const ch of s) {
+        const code = ch.charCodeAt(0)
+        if (code <= 0xFF) bytes.push(code)
+        else if (W[code] !== undefined) bytes.push(W[code])
+        else return s
+      }
+      return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(bytes))
+    } catch (e) {
+      return s
+    }
+  }
+  const cleanName = (n) => fixMojibake(n)
+
+  // Let the user drag the window by its header and resize it from the corner.
+  useEffect(() => {
+    const onMove = (e) => {
+      const it = interaction.current
+      if (!it) return
+      if (it.mode === 'drag') {
+        setWinPos({ x: it.ox + (e.clientX - it.mx), y: it.oy + (e.clientY - it.my) })
+      } else {
+        setWinSize({
+          w: Math.max(320, it.ow + (e.clientX - it.mx)),
+          h: Math.max(220, it.oh + (e.clientY - it.my)),
+        })
+      }
+    }
+    const onUp = () => { interaction.current = null; document.body.style.userSelect = '' }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [])
+
+  const startDrag = (e) => {
+    if (e.button !== 0) return
+    interaction.current = { mode: 'drag', mx: e.clientX, my: e.clientY, ox: winPos.x, oy: winPos.y }
+    document.body.style.userSelect = 'none'
+  }
+  const startResize = (e) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    const r = cardRef.current ? cardRef.current.getBoundingClientRect() : { width: 560, height: 480 }
+    interaction.current = { mode: 'resize', mx: e.clientX, my: e.clientY, ow: r.width, oh: r.height }
+    document.body.style.userSelect = 'none'
+  }
+
   return (
     <>
     <div className="fixed inset-0 flex items-center justify-center p-4 z-50" style={{ backgroundColor: 'rgba(25,24,23,0.5)' }}>
-      <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', width: '100%', maxWidth: '40rem', maxHeight: '85vh', minWidth: '20rem', minHeight: '16rem', overflow: 'auto', resize: 'both', boxShadow: '0 12px 40px rgba(25,24,23,0.10)' }}>
+      <div
+        ref={cardRef}
+        style={{
+          backgroundColor: '#FFFFFF', borderRadius: '8px', position: 'relative',
+          display: 'flex', flexDirection: 'column',
+          width: winSize.w ? `${winSize.w}px` : '100%',
+          maxWidth: winSize.w ? 'none' : '40rem',
+          height: winSize.h ? `${winSize.h}px` : 'auto',
+          maxHeight: '85vh', overflow: 'hidden',
+          transform: `translate(${winPos.x}px, ${winPos.y}px)`,
+          boxShadow: '0 12px 40px rgba(25,24,23,0.10)',
+        }}
+      >
+        <div style={{ flex: '1 1 auto', overflowY: 'auto', minHeight: 0 }}>
         <div style={{ padding: '24px' }}>
           <style>{`
             .x-rich { white-space: pre-wrap; }
@@ -330,10 +404,10 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
           )}
 
           {/* Header */}
-          <div className="sticky top-0 z-40" style={{ backgroundColor: '#FFFFFF', paddingBottom: '16px', marginBottom: '16px', borderBottom: `1px solid ${X.line}` }}>
+          <div className="sticky top-0 z-40" onMouseDown={startDrag} style={{ backgroundColor: '#FFFFFF', paddingBottom: '16px', marginBottom: '16px', borderBottom: `1px solid ${X.line}`, cursor: 'move' }}>
             <div className="flex justify-between items-start" style={{ marginBottom: '16px' }}>
               <h1 className="x-serif" style={{ fontSize: '24px', color: X.black, marginRight: '16px' }}>{name}</h1>
-              <button onClick={onClose} style={{ color: X.muted, flexShrink: 0, display: 'flex', background: 'transparent', border: 'none', cursor: 'pointer' }} title="Close"><IconClose size={22} /></button>
+              <button onClick={onClose} onMouseDown={(e) => e.stopPropagation()} style={{ color: X.muted, flexShrink: 0, display: 'flex', background: 'transparent', border: 'none', cursor: 'pointer' }} title="Close"><IconClose size={22} /></button>
             </div>
             <div>
               <span style={{ ...statusStyle, padding: '4px 12px', borderRadius: '999px', fontSize: '11px', fontWeight: 500 }}>
@@ -565,10 +639,10 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
                       <img src={att.url} alt={att.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                     </button>
                   ) : (
-                    <a key={att.gid} href={att.url} download={att.name} target="_blank" rel="noopener noreferrer" title={att.name}
+                    <a key={att.gid} href={att.url} download={cleanName(att.name)} target="_blank" rel="noopener noreferrer" title={cleanName(att.name)}
                       style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', maxWidth: '220px', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${X.line}`, background: X.creme, color: X.black, textDecoration: 'none', fontSize: '13px' }}>
                       <IconPaperclip size={15} />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.name}</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cleanName(att.name)}</span>
                     </a>
                   )
                 ))}
@@ -576,6 +650,8 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
             </div>
           )}
         </div>
+        </div>
+        <div onMouseDown={startResize} title="Drag to resize" style={{ position: 'absolute', right: '4px', bottom: '4px', width: '16px', height: '16px', cursor: 'nwse-resize', backgroundImage: `repeating-linear-gradient(135deg, ${X.lineStrong} 0 1.5px, transparent 1.5px 4px)`, opacity: 0.6, borderRadius: '2px' }} />
       </div>
     </div>
 
@@ -585,9 +661,9 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
         <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', maxWidth: '92vw', maxHeight: '92vh' }}>
           <img src={lightbox.url} alt={lightbox.name} style={{ maxWidth: '92vw', maxHeight: '78vh', objectFit: 'contain', borderRadius: '8px', background: '#FFFFFF' }} />
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-            <span style={{ color: X.creme, fontSize: '13px', maxWidth: '50vw', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lightbox.name}</span>
+            <span style={{ color: X.creme, fontSize: '13px', maxWidth: '50vw', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cleanName(lightbox.name)}</span>
             <button onClick={() => copyImage(lightbox.url)} style={lightboxBtn}>{copied ? 'Copied' : 'Copy'}</button>
-            <a href={lightbox.url} download={lightbox.name} target="_blank" rel="noopener noreferrer" style={lightboxBtn}>Download</a>
+            <a href={lightbox.url} download={cleanName(lightbox.name)} target="_blank" rel="noopener noreferrer" style={lightboxBtn}>Download</a>
             <button onClick={() => setLightbox(null)} style={lightboxBtn}>Close</button>
           </div>
         </div>
