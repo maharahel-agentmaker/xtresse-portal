@@ -12,6 +12,9 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
   const [showConfirmation, setShowConfirmation] = useState(false)
   const [uploadedFiles, setUploadedFiles] = useState([])
   const [conversation, setConversation] = useState([])
+  const [attachments, setAttachments] = useState([])
+  const [lightbox, setLightbox] = useState(null)
+  const [copied, setCopied] = useState(false)
   const fileInputRef = useRef(null)
 
   const MAX_FILE_MB = 4
@@ -23,6 +26,7 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
       if (!res.ok) return
       const data = await res.json()
       setConversation(data.messages || [])
+      setAttachments(data.attachments || [])
     } catch (e) { /* ignore */ }
   }
 
@@ -229,8 +233,60 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
   const statusStyle = task.completed
     ? { backgroundColor: X.black, color: X.creme }
     : { backgroundColor: X.orange, color: X.black }
+  const lightboxBtn = { padding: '7px 14px', borderRadius: '4px', border: `1px solid ${X.line}`, background: '#FFFFFF', color: X.black, fontSize: '13px', cursor: 'pointer', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }
+
+  // Copy an image to the clipboard; falls back to copying the link if the
+  // browser can't copy image bytes (e.g. cross-origin fetch is blocked).
+  const copyImage = async (url) => {
+    try {
+      const resp = await fetch(url)
+      const blob = await resp.blob()
+      if (window.ClipboardItem && navigator.clipboard && navigator.clipboard.write) {
+        await navigator.clipboard.write([new window.ClipboardItem({ [blob.type || 'image/png']: blob })])
+      } else {
+        throw new Error('clipboard image unsupported')
+      }
+    } catch (e) {
+      try { await navigator.clipboard.writeText(url) } catch (e2) { /* ignore */ }
+    }
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  // Files shown inline, directly beneath the message that sent them.
+  const renderMessageFiles = (files, dark) => {
+    if (!files || files.length === 0) return null
+    const images = files.filter(f => f.is_image)
+    const docs = files.filter(f => !f.is_image)
+    const chipBg = dark ? 'rgba(255,255,255,0.14)' : '#FFFFFF'
+    const chipText = dark ? X.creme : X.black
+    const chipBorder = dark ? 'rgba(255,255,255,0.28)' : X.line
+    const linkColor = dark ? X.orange : X.merlot
+    return (
+      <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {images.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {images.map(f => (
+              <button key={f.gid} onClick={() => setLightbox(f)} title={f.name}
+                style={{ padding: 0, width: '72px', height: '72px', borderRadius: '6px', overflow: 'hidden', border: `1px solid ${chipBorder}`, background: chipBg, cursor: 'pointer' }}>
+                <img src={f.url} alt={f.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+              </button>
+            ))}
+          </div>
+        )}
+        {docs.map(f => (
+          <div key={f.gid} style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', maxWidth: '100%', padding: '8px 10px', borderRadius: '4px', border: `1px solid ${chipBorder}`, background: chipBg, color: chipText, fontSize: '13px' }}>
+            <span style={{ flexShrink: 0, display: 'flex' }}><IconPaperclip size={14} /></span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{f.name}</span>
+            <a href={f.url} download={f.name} target="_blank" rel="noopener noreferrer" style={{ color: linkColor, textDecoration: 'underline', flexShrink: 0 }}>Download</a>
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   return (
+    <>
     <div className="fixed inset-0 flex items-center justify-center p-4 z-50" style={{ backgroundColor: 'rgba(25,24,23,0.5)' }}>
       <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', maxWidth: '42rem', width: '100%', maxHeight: '100vh', overflowY: 'auto', boxShadow: '0 12px 40px rgba(25,24,23,0.10)' }}>
         <div style={{ padding: '24px' }}>
@@ -437,19 +493,22 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
                         <p style={{ fontSize: '11px', color: X.muted, marginBottom: '4px', textAlign: isClient ? 'left' : 'right' }}>
                           {isClient ? 'You' : (msg.author || 'Branday')}{when ? ` · ${when}` : ''}
                         </p>
-                        <div style={{
-                          padding: '10px 12px',
-                          borderRadius: '10px',
-                          fontSize: '14px',
-                          lineHeight: 1.5,
-                          whiteSpace: 'pre-wrap',
-                          wordBreak: 'break-word',
-                          backgroundColor: isClient ? '#FFFFFF' : X.black,
-                          color: isClient ? X.black : X.creme,
-                          border: isClient ? `1px solid ${X.line}` : 'none',
-                        }}>
-                          {msg.text}
-                        </div>
+                        {msg.text && (
+                          <div style={{
+                            padding: '10px 12px',
+                            borderRadius: '10px',
+                            fontSize: '14px',
+                            lineHeight: 1.5,
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            backgroundColor: isClient ? '#FFFFFF' : X.black,
+                            color: isClient ? X.black : X.creme,
+                            border: isClient ? `1px solid ${X.line}` : 'none',
+                          }}>
+                            {msg.text}
+                          </div>
+                        )}
+                        {renderMessageFiles(msg.files, !isClient)}
                       </div>
                     </div>
                   )
@@ -457,8 +516,47 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
               </div>
             </div>
           )}
+
+          {/* Shared files — every client-facing attachment on the task, both directions */}
+          {attachments.length > 0 && (
+            <div style={{ marginTop: conversation.length > 0 ? '20px' : '0' }}>
+              <h3 style={{ ...eyebrow, marginBottom: '12px' }}>Shared files</h3>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
+                {attachments.map((att) => (
+                  att.is_image ? (
+                    <button key={att.gid} onClick={() => setLightbox(att)} title={att.name}
+                      style={{ padding: 0, width: '96px', height: '96px', borderRadius: '8px', overflow: 'hidden', border: `1px solid ${X.line}`, background: X.creme, cursor: 'pointer' }}>
+                      <img src={att.url} alt={att.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    </button>
+                  ) : (
+                    <a key={att.gid} href={att.url} download={att.name} target="_blank" rel="noopener noreferrer" title={att.name}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', maxWidth: '220px', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${X.line}`, background: X.creme, color: X.black, textDecoration: 'none', fontSize: '13px' }}>
+                      <IconPaperclip size={15} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{att.name}</span>
+                    </a>
+                  )
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
+
+    {/* Image lightbox — enlarge, copy, download */}
+    {lightbox && (
+      <div onClick={() => setLightbox(null)} className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 60, backgroundColor: 'rgba(25,24,23,0.85)' }}>
+        <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px', maxWidth: '92vw', maxHeight: '92vh' }}>
+          <img src={lightbox.url} alt={lightbox.name} style={{ maxWidth: '92vw', maxHeight: '78vh', objectFit: 'contain', borderRadius: '8px', background: '#FFFFFF' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <span style={{ color: X.creme, fontSize: '13px', maxWidth: '50vw', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lightbox.name}</span>
+            <button onClick={() => copyImage(lightbox.url)} style={lightboxBtn}>{copied ? 'Copied' : 'Copy'}</button>
+            <a href={lightbox.url} download={lightbox.name} target="_blank" rel="noopener noreferrer" style={lightboxBtn}>Download</a>
+            <button onClick={() => setLightbox(null)} style={lightboxBtn}>Close</button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   )
 }
