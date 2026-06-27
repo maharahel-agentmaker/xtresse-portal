@@ -21,7 +21,9 @@ async function asanaGet(path) {
   return res.json()
 }
 
-// Call a Slack Web API method with the bot token.
+// Call a Slack Web API method with the bot token (JSON body).
+// NOTE: this works for methods that accept JSON, such as conversations.open
+// and chat.postMessage. It does NOT work for users.lookupByEmail — see below.
 async function slackApi(method, body) {
   const res = await fetch(`${SLACK_API}/${method}`, {
     method: 'POST',
@@ -30,6 +32,21 @@ async function slackApi(method, body) {
       'Content-Type': 'application/json; charset=utf-8',
     },
     body: JSON.stringify(body),
+  })
+  return res.json()
+}
+
+// users.lookupByEmail does NOT accept a JSON body — it only reads
+// form-urlencoded parameters. Sending JSON makes Slack ignore the email and
+// return "invalid_arguments". So this one call is encoded as a form post.
+async function slackLookupByEmail(email) {
+  const res = await fetch(`${SLACK_API}/users.lookupByEmail`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ email }).toString(),
   })
   return res.json()
 }
@@ -85,7 +102,7 @@ async function postToChannel(taskName, taskGid, text) {
 async function dmRequester(email, taskName, taskGid, text) {
   if (!process.env.SLACK_BOT_TOKEN || !email) return false
   try {
-    const lookup = await slackApi('users.lookupByEmail', { email })
+    const lookup = await slackLookupByEmail(email)
     if (!lookup.ok || !lookup.user) {
       console.warn(`No Slack user for ${email}: ${lookup.error || 'not found'}`)
       return false
