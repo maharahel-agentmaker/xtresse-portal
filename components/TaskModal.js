@@ -228,6 +228,25 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
     return value
   }
 
+  // Turn bare URLs in plain text into clickable links (used for the description
+  // when only Asana's plain-text version is available).
+  const linkifyText = (value) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g
+    return String(value || '').split(urlRegex).map((part, idx) =>
+      /^https?:\/\//.test(part)
+        ? <a key={idx} href={part} target="_blank" rel="noopener noreferrer" style={{ color: X.merlot, textDecoration: 'underline', wordBreak: 'break-all' }}>{part}</a>
+        : <span key={idx}>{part}</span>
+    )
+  }
+
+  // Asana stores a rich-text version of the description in html_notes (numbered
+  // lists, bold, real links). When it's present we render that for full fidelity;
+  // otherwise we fall back to the plain text with URLs linkified. Asana wraps the
+  // markup in <body>…</body>, so strip that wrapper before rendering.
+  const richDescription = task.html_notes
+    ? task.html_notes.replace(/^\s*<body>/i, '').replace(/<\/body>\s*$/i, '').trim()
+    : ''
+
   const eyebrow = { textTransform: 'uppercase', letterSpacing: '0.18em', fontSize: '11px', fontWeight: 500, color: X.muted, marginBottom: '4px' }
   const fieldVal = { fontSize: '14px', fontWeight: 400, color: X.black }
   const statusStyle = task.completed
@@ -288,8 +307,17 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
   return (
     <>
     <div className="fixed inset-0 flex items-center justify-center p-4 z-50" style={{ backgroundColor: 'rgba(25,24,23,0.5)' }}>
-      <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', maxWidth: '42rem', width: '100%', maxHeight: '100vh', overflowY: 'auto', boxShadow: '0 12px 40px rgba(25,24,23,0.10)' }}>
+      <div style={{ backgroundColor: '#FFFFFF', borderRadius: '8px', width: '100%', maxWidth: '40rem', maxHeight: '85vh', minWidth: '20rem', minHeight: '16rem', overflow: 'auto', resize: 'both', boxShadow: '0 12px 40px rgba(25,24,23,0.10)' }}>
         <div style={{ padding: '24px' }}>
+          <style>{`
+            .x-rich { white-space: pre-wrap; }
+            .x-rich ol { list-style: decimal outside; padding-left: 1.5rem; margin: 0.25rem 0; white-space: normal; }
+            .x-rich ul { list-style: disc outside; padding-left: 1.5rem; margin: 0.25rem 0; white-space: normal; }
+            .x-rich li { margin: 2px 0; }
+            .x-rich p { margin: 0 0 0.5rem 0; }
+            .x-rich h1, .x-rich h2 { font-weight: 600; margin: 0.5rem 0; }
+            .x-rich a { color: ${X.merlot}; text-decoration: underline; word-break: break-all; }
+          `}</style>
 
           {showConfirmation && (
             <div style={{ marginBottom: '16px', padding: '16px', backgroundColor: X.orangeSoft, borderRadius: '8px', display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
@@ -410,10 +438,18 @@ export default function TaskModal({ task, onClose, onUpdate, primaryColor = X.or
           )}
 
           {/* Description */}
-          {description && (
+          {(richDescription || description) && (
             <div style={{ marginBottom: '24px' }}>
               <p style={{ ...eyebrow, marginBottom: '8px' }}>Description</p>
-              <div style={{ width: '100%', padding: '12px', border: `1px solid ${X.line}`, borderRadius: '4px', fontSize: '14px', backgroundColor: X.creme, whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6, color: X.black }}>{description}</div>
+              {richDescription ? (
+                <div
+                  className="x-rich"
+                  style={{ width: '100%', padding: '12px', border: `1px solid ${X.line}`, borderRadius: '4px', fontSize: '14px', backgroundColor: X.creme, wordBreak: 'break-word', lineHeight: 1.6, color: X.black }}
+                  dangerouslySetInnerHTML={{ __html: richDescription }}
+                />
+              ) : (
+                <div style={{ width: '100%', padding: '12px', border: `1px solid ${X.line}`, borderRadius: '4px', fontSize: '14px', backgroundColor: X.creme, whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.6, color: X.black }}>{linkifyText(description)}</div>
+              )}
             </div>
           )}
 
