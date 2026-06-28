@@ -160,7 +160,7 @@ function buildEmailHtml(mainName, subName, text, portalLink) {
         </td></tr>
         <tr><td style="padding:0 36px;">${button}</td></tr>
         <tr><td style="padding:16px 36px 34px;">
-          <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#A39C8E;">You're receiving this because you're listed as the requester on this task in the Xtressé portal. Please reply inside the portal so your message is tracked with the project.</p>
+          <p style="margin:0;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#A39C8E;">You're receiving this because you're listed as the requester on this task in the Xtressé portal. This is an automated message - please do not reply to this email. To respond, open the portal so your message stays with the project.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -186,7 +186,7 @@ async function emailRequester(email, mainName, subName, taskGid, text) {
     if (subName) plainLines.push(`Regarding: ${subName}`)
     plainLines.push('', clientText, '')
     if (portalLink) plainLines.push(`Open in portal: ${portalLink}`, '')
-    plainLines.push("You're receiving this because you're listed as the requester on this task in the Xtressé portal.")
+    plainLines.push("This is an automated message - please do not reply to this email. To respond, open the portal. You're receiving it because you're the requester on this task in the Xtressé portal.")
 
     const payload = {
       from,
