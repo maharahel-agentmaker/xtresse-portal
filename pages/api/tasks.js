@@ -2,14 +2,23 @@ const ASANA_API = 'https://app.asana.com/api/1.0'
 const PROJECT_ID = process.env.NEXT_PUBLIC_ASANA_PROJECT_ID
 const API_TOKEN = process.env.ASANA_API_TOKEN
 
-// Only the custom-field sub-properties the UI actually renders.
-// Crucially this omits `custom_fields.enum_options`, which Asana otherwise
-// returns in full for every enum field on every task/subtask — the main
-// cause of the response ballooning past Asana/Vercel's ~4.5MB limit.
-const CF = 'custom_fields.gid,custom_fields.name,custom_fields.display_value,custom_fields.text_value,custom_fields.number_value,custom_fields.enum_value.name'
+// Only these custom fields are shown to clients in the portal — list columns AND the
+// task/subtask detail grids. Anything NOT in this list (including any field added in
+// Asana later) is filtered out here at the source, so it never reaches the portal.
+const CLIENT_VISIBLE_FIELDS = [
+  'Stage',
+  'Date Submitted',
+  'Requested Due Date',
+  'Asset Type',
+  'Client Deliverable Location',
+  'First Iteration',
+  '2nd Iteration',
+]
 
-const TASK_FIELDS = `gid,name,notes,html_notes,completed,due_on,assignee.name,tags.name,num_subtasks,created_at,modified_at,${CF}`
-const SUBTASK_FIELDS = `gid,name,notes,completed,due_on,assignee.name,num_subtasks,created_at,modified_at,${CF}`
+function clientFields(customFields) {
+  if (!Array.isArray(customFields)) return []
+  return customFields.filter((f) => f && CLIENT_VISIBLE_FIELDS.includes(f.name))
+}
 
 async function asanaFetch(path, options = {}) {
   const res = await fetch(`${ASANA_API}${path}`, {
@@ -34,27 +43,36 @@ export default async function handler(req, res) {
       const tasksBySection = await Promise.all(
         sections.map(async (section) => {
           const tasksData = await asanaFetch(
-            `/sections/${section.gid}/tasks?opt_fields=${TASK_FIELDS}`
+            `/sections/${section.gid}/tasks?opt_fields=gid,name,notes,completed,completed_at,due_on,due_at,start_on,assignee.name,assignee.email,tags.name,num_subtasks,custom_fields,memberships.section.name,followers.name,created_at,modified_at`
           )
-          return { section, tasks: tasksData.data || [] }
+          return {
+            section,
+            tasks: tasksData.data || [],
+          }
         })
       )
 
-      // Flatten with section info attached to each task
+      // Flatten with section info attached to each task, and fetch subtasks
       let allTasks = tasksBySection.flatMap(({ section, tasks }) =>
-        tasks.map((task) => ({ ...task, section }))
+        tasks.map((task) => ({ ...task, section, custom_fields: clientFields(task.custom_fields) }))
       )
 
-      // Fetch subtasks only for tasks that have them
+      // Fetch subtasks for each task with all fields
       allTasks = await Promise.all(
         allTasks.map(async (task) => {
           if (task.num_subtasks > 0) {
             const subtasksData = await asanaFetch(
-              `/tasks/${task.gid}/subtasks?opt_fields=${SUBTASK_FIELDS}`
+              `/tasks/${task.gid}/subtasks?opt_fields=gid,name,notes,completed,due_on,start_on,assignee.name,tags.name,num_subtasks,custom_fields,created_at,modified_at`
             )
-            return { ...task, subtasks: subtasksData.data || [] }
+            return {
+              ...task,
+              subtasks: (subtasksData.data || []).map((st) => ({ ...st, custom_fields: clientFields(st.custom_fields) }))
+            }
           }
-          return { ...task, subtasks: [] }
+          return {
+            ...task,
+            subtasks: []
+          }
         })
       )
 
@@ -64,10 +82,15 @@ export default async function handler(req, res) {
       const data = await asanaFetch('/tasks', {
         method: 'POST',
         body: JSON.stringify({
-          data: { name, notes: description, projects: [PROJECT_ID] },
+          data: {
+            name,
+            notes: description,
+            projects: [PROJECT_ID],
+          },
         }),
       })
 
+      // Move to section if specified
       if (sectionGid && data.data?.gid) {
         await asanaFetch(`/sections/${sectionGid}/addTask`, {
           method: 'POST',
