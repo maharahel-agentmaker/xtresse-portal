@@ -2,9 +2,9 @@ const ASANA_API = 'https://app.asana.com/api/1.0'
 const PROJECT_ID = process.env.NEXT_PUBLIC_ASANA_PROJECT_ID
 const API_TOKEN = process.env.ASANA_API_TOKEN
 
-// Only these custom fields are shown to clients in the portal — list columns AND the
-// task/subtask detail grids. Anything NOT in this list (including any field added in
-// Asana later) is filtered out here at the source, so it never reaches the portal.
+// Only these custom fields are shown to clients — list columns AND the task/subtask
+// detail grids. Anything not listed (including any field added in Asana later) is filtered
+// out here at the source, so it never reaches the portal. Order here = column order.
 const CLIENT_VISIBLE_FIELDS = [
   'Stage',
   'Date Submitted',
@@ -75,6 +75,30 @@ export default async function handler(req, res) {
           }
         })
       )
+
+      // Build a template (gid + name) for each approved field from whatever appears in the
+      // data, so a task that lacks a field still gets a blank placeholder for that column.
+      const fieldTemplates = {}
+      const collect = (cf) => (cf || []).forEach((f) => {
+        if (f && f.name && !fieldTemplates[f.name]) {
+          fieldTemplates[f.name] = { gid: f.gid, name: f.name, type: f.type, resource_type: f.resource_type }
+        }
+      })
+      allTasks.forEach((t) => { collect(t.custom_fields); (t.subtasks || []).forEach((st) => collect(st.custom_fields)) })
+
+      const padFields = (cf) => {
+        const byName = {}
+        ;(cf || []).forEach((f) => { if (f && f.name) byName[f.name] = f })
+        return CLIENT_VISIBLE_FIELDS
+          .filter((name) => fieldTemplates[name])
+          .map((name) => byName[name] || { ...fieldTemplates[name], display_value: null, text_value: null, number_value: null, enum_value: null })
+      }
+
+      allTasks = allTasks.map((t) => ({
+        ...t,
+        custom_fields: padFields(t.custom_fields),
+        subtasks: (t.subtasks || []).map((st) => ({ ...st, custom_fields: padFields(st.custom_fields) })),
+      }))
 
       res.status(200).json({ tasks: allTasks, sections })
     } else if (req.method === 'POST') {
